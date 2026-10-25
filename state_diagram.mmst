@@ -1,0 +1,111 @@
+{
+  "schemaVersion": 1,
+  "id": "efc8ca10-0490-4df4-b352-1c23865d5691",
+  "title": "state",
+  "root": {
+    "id": "root",
+    "topic": "state",
+    "children": [
+      {
+        "id": "604bb31b-b160-4411-8c0e-af029c0faf49",
+        "topic": "navigate mode",
+        "children": [
+          {
+            "id": "459da665-9137-46ad-850b-b2f9acedd9a4",
+            "topic": "use jkhl to traverse nodes",
+            "children": [],
+            "createdAt": 1792949805747,
+            "modifiedAt": 1792949825195
+          },
+          {
+            "id": "8d997458-34c7-4c9f-a053-46411f9a614e",
+            "topic": "type / and search for node names (auto-generated and visible) or use vim motions to quickly traverse node (like $ to go to the end node or I to go to first node)",
+            "children": [],
+            "createdAt": 1792949825195,
+            "modifiedAt": 1792949945963
+          }
+        ],
+        "createdAt": 1792949651803,
+        "modifiedAt": 1792949661354,
+        "collapsed": false
+      },
+      {
+        "id": "42ef7c9a-99b6-432c-a322-fd552264b69e",
+        "topic": "command mode",
+        "children": [
+          {
+            "id": "e863df4c-d157-4b67-87e9-8f17596204d4",
+            "topic": "select shape of the next block",
+            "children": [],
+            "createdAt": 1792949718350,
+            "modifiedAt": 1792950384762,
+            "collapsed": false
+          },
+          {
+            "id": "3cebcfb7-6006-430c-aab1-3eb868c7cebe",
+            "topic": "CRUD file operations",
+            "children": [],
+            "createdAt": 1792949726323,
+            "modifiedAt": 1792949738820
+          },
+          {
+            "id": "da06efa3-6214-4a83-8ad2-5c813f219beb",
+            "topic": "search and filter",
+            "children": [],
+            "createdAt": 1792949738820,
+            "modifiedAt": 1792949761461
+          },
+          {
+            "id": "0b96069d-744c-4180-b404-3964f95f2184",
+            "topic": "create a block or template with commands that may or may not be linked.",
+            "children": [],
+            "createdAt": 1792949981523,
+            "modifiedAt": 1792950045675
+          }
+        ],
+        "createdAt": 1792949661354,
+        "modifiedAt": 1792949665547,
+        "collapsed": false
+      },
+      {
+        "id": "78a7b9d9-ed61-452f-a1da-318b2f511c6d",
+        "topic": "edit mode",
+        "children": [
+          {
+            "id": "e6f3b06e-c557-471e-9e65-4c0b759a58e4",
+            "topic": "use vim bindings to edit text inside a block",
+            "children": [],
+            "createdAt": 1792950203650,
+            "modifiedAt": 1792950233346
+          }
+        ],
+        "createdAt": 1792949665547,
+        "modifiedAt": 1792949705140,
+        "collapsed": false
+      },
+      {
+        "id": "6117bcb8-1f76-47cc-bac1-be7aac8eedb3",
+        "topic": "macro mode",
+        "children": [
+          {
+            "id": "d593ab41-941c-4a7b-a624-d0c2cfc54724",
+            "topic": "create a keybinding macro to repeat actions that are recorded.",
+            "children": [],
+            "createdAt": 1792950176466,
+            "modifiedAt": 1792950199266
+          }
+        ],
+        "createdAt": 1792950172802,
+        "modifiedAt": 1792950176466,
+        "collapsed": false
+      }
+    ],
+    "createdAt": 1792949651803,
+    "modifiedAt": 1792950696483,
+    "collapsed": false,
+    "note": "# key bindings\n\nCustomizable key bindings like neovim\n\nfew examples:\n\nin navigate mode:\n\n<leader>c - create a new cylinder with an arrow link to the selected node and goes into insert mode inside the new block\n\n<leader> ic - create a new cylinder without any arrow\n\n<leader>b - create a new block (rectangle) and goes into the block in insert mode.\n\n<leader>s - create a sub-block within the block\n\n<leader>ls - create a text area within the block separated by a line"
+  },
+  "meta": {
+    "source": "new"
+  }
+}

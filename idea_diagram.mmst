@@ -1,0 +1,136 @@
+{
+  "schemaVersion": 1,
+  "id": "c64efb2a-b650-4695-a91e-6d1df9e62770",
+  "title": "vim like diagram",
+  "root": {
+    "id": "root",
+    "topic": "vim like diagram",
+    "children": [
+      {
+        "id": "c055fc3d-6fff-4616-a29d-11ff506877b6",
+        "topic": "type something and wrap it in a block in a single move",
+        "children": [
+          {
+            "id": "6151f66f-bf4a-410e-aabc-ca453c2f2b30",
+            "topic": "link the block to another block",
+            "children": [
+              {
+                "id": "3b488da8-07aa-429e-9e84-758473a3814f",
+                "topic": "link by pressing a key and start typing (tab to create child, enter to create sibling)",
+                "children": [
+                  {
+                    "id": "55120af6-24d7-4158-b29c-13adf6e92268",
+                    "topic": "confirm edit, go to navigate mode and go across nodes",
+                    "children": [],
+                    "createdAt": 1792925345654,
+                    "modifiedAt": 1792925373495
+                  },
+                  {
+                    "id": "7686abff-084b-4fea-9732-ae581d7e05de",
+                    "topic": "define relationship using a key",
+                    "children": [],
+                    "createdAt": 1792926366192,
+                    "modifiedAt": 1792926372352
+                  },
+                  {
+                    "id": "965cb200-1443-465c-b6d2-e21069f7be3b",
+                    "topic": "Edit a single block with metadata attributes in a popup or sidebar window",
+                    "children": [],
+                    "createdAt": 1792926440890,
+                    "modifiedAt": 1792926485842
+                  },
+                  {
+                    "id": "112bf505-743b-4a70-b941-afdb383018b1",
+                    "topic": "create a new diagram within the single block and nest the diagram inside the block (by shift+ click to go inside the diagram)",
+                    "children": [],
+                    "createdAt": 1792926485842,
+                    "modifiedAt": 1792926525650
+                  }
+                ],
+                "createdAt": 1792925217853,
+                "modifiedAt": 1792932030098,
+                "collapsed": false
+              }
+            ],
+            "createdAt": 1792924312529,
+            "modifiedAt": 1792924335504,
+            "collapsed": false
+          },
+          {
+            "id": "e5cd44e2-7b45-4021-9a02-21d17fc7dd79",
+            "topic": "delete the block",
+            "children": [],
+            "createdAt": 1792924366967,
+            "modifiedAt": 1792924380929
+          },
+          {
+            "id": "bd50d3d4-c595-47ce-88d8-bc55cec5d2b3",
+            "topic": "add tags to the block",
+            "children": [],
+            "createdAt": 1792924380929,
+            "modifiedAt": 1792924395311
+          },
+          {
+            "id": "1382bee5-3cb1-4e84-b59d-33a5c58961ef",
+            "topic": "name something to the block for quick navigation",
+            "children": [],
+            "createdAt": 1792924471904,
+            "modifiedAt": 1792924498598
+          },
+          {
+            "id": "bd63eac3-cb1a-43f1-8d60-f6e3d9cb3a0b",
+            "topic": "add a sub-block",
+            "children": [
+              {
+                "id": "210f3a51-a950-4bda-9c56-6bfd9fbd8f54",
+                "topic": "add subblock as a new block",
+                "children": [],
+                "createdAt": 1792924692265,
+                "modifiedAt": 1792924703185
+              },
+              {
+                "id": "01e1916a-5355-4104-9d5b-7f11c2e41e1b",
+                "topic": "add subblock inline- separated by a line",
+                "children": [],
+                "createdAt": 1792924703185,
+                "modifiedAt": 1792924714966
+              }
+            ],
+            "createdAt": 1792924650974,
+            "modifiedAt": 1792924668362,
+            "collapsed": false
+          },
+          {
+            "id": "2086181f-5d1d-491c-b3c0-7ce5f31a29bf",
+            "topic": "create a new block without a link to previous block",
+            "children": [
+              {
+                "id": "743705e7-6151-476d-81cc-079c3967cf6e",
+                "topic": "link the selected block to another block using a key (super + l) then navigating to a block and press Enter to confirm, escape to cancel.",
+                "children": [],
+                "createdAt": 1792927397269,
+                "modifiedAt": 1792927450067
+              }
+            ],
+            "createdAt": 1792927360049,
+            "modifiedAt": 1792927374729,
+            "collapsed": false
+          }
+        ],
+        "createdAt": 1792923742355,
+        "modifiedAt": 1792926398640,
+        "collapsed": false,
+        "branchColor": "#c2701a"
+      }
+    ],
+    "collapsed": false,
+    "createdAt": 1792923578414,
+    "modifiedAt": 1792923578414
+  },
+  "meta": {
+    "source": "new",
+    "updatedAt": 1792933013410,
+    "connectorStyle": "curved",
+    "accentColor": "#7c83ff"
+  }
+}
