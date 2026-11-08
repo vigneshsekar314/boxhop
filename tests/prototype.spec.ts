@@ -74,10 +74,15 @@ test('creation keeps positions stable; labeled creation can cancel; undo restore
   await expect(page.locator('.connection')).toHaveCount(5);
   await expect(page.locator('.connections text').filter({ hasText: 'depends on' })).toBeVisible();
   expect((await page.locator('.block').evaluateAll(blocks => blocks.map(b => b.getAttribute('style')))).slice(0, 5)).toEqual(positions);
-  await page.keyboard.type('dd');
+  await page.keyboard.press('d');
   await expect(page.locator('.block')).toHaveCount(5);
   await expect(page.locator('.connection')).toHaveCount(4);
   await page.keyboard.press('u');
+  await expect(page.locator('.block')).toHaveCount(6);
+  await expect(page.locator('.connection')).toHaveCount(5);
+  await page.keyboard.press('u');
+  await expect(page.locator('.block')).toHaveCount(5);
+  await page.keyboard.press('Shift+R');
   await expect(page.locator('.block')).toHaveCount(6);
   await expect(page.locator('.connection')).toHaveCount(5);
   await page.keyboard.press('u');
@@ -118,4 +123,43 @@ test('Vim command prompt and help return to the correct keyboard scope', async (
   await expect(page.locator('.cm-content')).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(page.locator('.mode')).toHaveText('PAN');
+});
+
+test('Markdown preview follows the focused block, scrolls, and updates while editing', async ({ page }) => {
+  await page.evaluate(() => {
+    localStorage.setItem('boxhop-prototype-v1', JSON.stringify({
+      version: 1,
+      blocks: [
+        { id: 'first', x: 0, y: 0, text: '# First thought\n\n**Bold** and [a link](https://example.com)\n\n' + Array.from({ length: 50 }, (_, index) => `Paragraph ${index}`).join('\n\n') + '\n\n<script>alert(1)</script>' },
+        { id: 'second', x: 360, y: 0, text: '' },
+      ],
+      links: [],
+    }));
+  });
+  await page.reload();
+  await page.keyboard.press('p');
+  const preview = page.getByRole('complementary', { name: 'Markdown preview' });
+  const content = page.getByLabel('Preview content');
+  await expect(preview.getByRole('heading', { name: 'First thought' })).toBeVisible();
+  await expect(preview.locator('strong')).toHaveText('Bold');
+  await expect(preview.getByRole('link', { name: 'a link' })).toHaveAttribute('href', 'https://example.com');
+  await expect(preview.locator('script')).toHaveCount(0);
+  await content.focus();
+  await page.keyboard.press('End');
+  await expect.poll(() => content.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+  await page.locator('.canvas').focus();
+  await page.keyboard.press('l');
+  await expect(preview).toContainText('This thought is empty.');
+  await page.keyboard.press('i');
+  await page.keyboard.type('# Live preview');
+  await expect(preview.getByRole('heading', { name: 'Live preview' })).toBeVisible();
+  await page.getByRole('button', { name: 'Close preview' }).click();
+  await expect(preview).toHaveCount(0);
+  await expect(page.locator('.cm-content')).toBeFocused();
+  await page.getByRole('button', { name: 'Preview', exact: true }).click();
+  await expect(preview.getByRole('heading', { name: 'Live preview' })).toBeVisible();
+  await content.focus();
+  await page.keyboard.press('Escape');
+  await expect(preview).toHaveCount(0);
+  await expect(page.locator('.cm-content')).toBeFocused();
 });

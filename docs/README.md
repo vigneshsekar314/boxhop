@@ -22,10 +22,11 @@ Open the URL Vite prints (normally http://127.0.0.1:5173). A sample diagram is r
 | Canvas | `aa` | Create an independent block and start typing. |
 | Canvas | `al` | Create a linked block and start typing. |
 | Canvas | `atl` | Type a link label, then create and edit a linked block. |
-| Canvas | `dd` | Delete the focused block and its links. |
-| Canvas | `u` / `Ctrl+r` | Undo / redo a diagram change. |
+| Canvas | `d` | Delete the focused block and its links. |
+| Canvas | `u` / `R` or `Ctrl+r` | Undo / redo a diagram change. |
 | Canvas | `Shift+H/J/K/L` | Pan left/down/up/right. |
 | Canvas | `+` / `-` / `0` | Zoom in / out / fit the diagram. |
+| Canvas | `p` | Toggle the focused block's Markdown preview. |
 | Canvas | `?` | Show shortcuts. |
 | Block editor | `Esc` | Return from insert or visual mode to Vim normal mode. |
 | Block editor, normal | `Esc` | Return to canvas navigation. |
@@ -34,6 +35,8 @@ Open the URL Vite prints (normally http://127.0.0.1:5173). A sample diagram is r
 `Enter` inserts a newline in insert mode, and `Tab` indents. A Vim `:` command prompt belongs to the text editor; application command mode is not implemented. In canvas mode, `Tab` retains ordinary browser focus navigation. `Esc` also cancels a pending creation prefix or a link-label dialog.
 
 Click to focus a block, double-click to edit, drag a block to reposition it, or drag empty canvas/scroll to pan. Keyboard navigation keeps the focused block visible. New blocks find free space without moving existing blocks.
+
+Use **Preview** in the toolbar or `p` on the canvas to open a scrollable Markdown side pane. It follows the focused block and updates while you edit. Tab to the preview content to scroll with the keyboard; `Esc` closes the pane when focus is inside it.
 
 ## Saving and limits
 

@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { VimEditor } from './VimEditor';
 import './style.css';
 
@@ -54,6 +56,7 @@ function App() {
   const [vimMode, setVimMode] = useState('INSERT');
   const [prefix, setPrefix] = useState('');
   const [help, setHelp] = useState(false);
+  const [preview, setPreview] = useState(false);
   const [labelSource, setLabelSource] = useState<string | null>(null);
   const [label, setLabel] = useState('');
   const [camera, setCamera] = useState<Camera>({ x: 0, y: 0, zoom: 1 });
@@ -74,6 +77,12 @@ function App() {
   }
   function change(next: Diagram) { remember(current.current); update(next); }
   function returnToCanvas() { canvas.current?.focus(); }
+  function togglePreview() {
+    setPreview(open => !open);
+    setPrefix('');
+    if (editing) document.querySelector<HTMLElement>('.cm-content')?.focus();
+    else returnToCanvas();
+  }
   function closeHelp() {
     setHelp(false);
     if (editing) requestAnimationFrame(() => document.querySelector<HTMLElement>('.cm-content')?.focus());
@@ -169,6 +178,8 @@ function App() {
 
   useEffect(() => { if (help) helpClose.current?.focus(); }, [help]);
 
+  useEffect(() => { if (focused) focusBlock(focused); }, [preview]);
+
   // Canvas shortcuts only run when the canvas itself owns keyboard focus.
   function onCanvasKey(event: ReactKeyboardEvent<HTMLDivElement>) {
     if (event.target !== event.currentTarget || event.isDefaultPrevented() || event.nativeEvent.isComposing || editing || labelSource || help) return;
@@ -188,10 +199,7 @@ function App() {
       else if (sequence === 'al') create(true);
       else if (sequence === 'at') setPrefix('at');
       else if (sequence === 'atl' && focused) { setLabelSource(focused); setLabel(''); }
-      else if (sequence === 'dd' && focused) {
-        change({ ...current.current, blocks: current.current.blocks.filter(b => b.id !== focused), links: current.current.links.filter(l => l.from !== focused && l.to !== focused) });
-        setFocused(current.current.blocks[0]?.id ?? null);
-      } else setMessage('Sequence canceled. aa: new · al: linked · atl: labeled link · dd: delete');
+      else setMessage('Sequence canceled. aa: new · al: linked · atl: labeled link · d: delete');
       return;
     }
     if (key in directions) {
@@ -210,11 +218,20 @@ function App() {
       const [dx, dy] = directions[key.toLowerCase()];
       setCamera(c => ({ ...c, x: c.x - dx * 80, y: c.y - dy * 80 }));
     } else if ((key === 'i' || key === 'Enter') && focused) { event.preventDefault(); edit(focused); }
-    else if (key === 'a' || key === 'd') { event.preventDefault(); setPrefix(key); }
+    else if (key === 'a') { event.preventDefault(); setPrefix(key); }
+    else if (key === 'd') {
+      event.preventDefault();
+      if (focused) {
+        change({ ...current.current, blocks: current.current.blocks.filter(b => b.id !== focused), links: current.current.links.filter(l => l.from !== focused && l.to !== focused) });
+        setFocused(current.current.blocks[0]?.id ?? null);
+      }
+    }
     else if (key === 'u') { event.preventDefault(); undo(); }
+    else if (key === 'R') { event.preventDefault(); undo(true); }
     else if (key === '+' || key === '=') { event.preventDefault(); zoomBy(1.15); }
     else if (key === '-') { event.preventDefault(); zoomBy(1 / 1.15); }
     else if (key === '0') { event.preventDefault(); fit(); }
+    else if (key === 'p') { event.preventDefault(); togglePreview(); }
     else if (key === '?') { event.preventDefault(); setHelp(true); }
   }
 
@@ -246,6 +263,7 @@ function App() {
       <a className="brand" href="./" aria-label="Boxhop home"><span className="brand-icon">b<span>↗</span></span>boxhop<span className="prototype">playground</span></a>
       <div className="document-name">Untitled thoughts <span> / </span><small>local draft</small></div>
       <nav aria-label="Document actions">
+        <button aria-pressed={preview} aria-controls="markdown-preview" onClick={togglePreview}>Preview</button>
         <button onClick={() => { if (editing) finishEdit(); fileInput.current?.click(); }}>Open</button>
         <button onClick={exportFile}>Download <span aria-hidden="true">↗</span></button>
         <button className="help-button" aria-label="Keyboard shortcuts" onClick={() => setHelp(true)}>?</button>
@@ -263,6 +281,7 @@ function App() {
       }} />
     </header>
 
+    <div className="workspace">
     <main ref={canvas} className="canvas" tabIndex={0} aria-label="Diagram canvas. h j k l to navigate. i to edit. Question mark for help."
       onKeyDown={onCanvasKey} onPointerDown={event => startDrag(event)} onPointerMove={dragMove} onPointerUp={endDrag} onPointerCancel={endDrag}
       onWheel={event => {
@@ -302,10 +321,24 @@ function App() {
         <div className="zoom-controls"><button aria-label="Zoom out" onClick={() => { zoomBy(1 / 1.15); returnToCanvas(); }}>−</button><span>{Math.round(camera.zoom * 100)}%</span><button aria-label="Zoom in" onClick={() => { zoomBy(1.15); returnToCanvas(); }}>+</button><span className="zoom-divider" /><button aria-label="Fit diagram" onClick={() => { fit(); returnToCanvas(); }}>↙↗</button></div>
       </div>
     </main>
+    {preview && <aside id="markdown-preview" className="preview-pane" aria-label="Markdown preview" onKeyDown={event => {
+      if (event.key === 'Escape') { event.stopPropagation(); togglePreview(); }
+    }}>
+      <div className="preview-header">
+        <div><span className="eyebrow">FOCUSED THOUGHT</span><h2>Markdown preview</h2></div>
+        <button aria-label="Close preview" onClick={togglePreview}>×</button>
+      </div>
+      <div key={focused} className="preview-content" tabIndex={0} aria-label="Preview content">
+        {selectedIndex < 0 ? <p className="preview-empty">Select a thought to preview it.</p> : diagram.blocks[selectedIndex].text ?
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{diagram.blocks[selectedIndex].text}</ReactMarkdown> :
+          <p className="preview-empty">This thought is empty.</p>}
+      </div>
+    </aside>}
+    </div>
 
     <footer className="statusbar" aria-label="Editor status">
       <div className={`mode ${editing ? 'mode-edit' : ''}`} aria-live="polite"><span className="mode-dot" />{mode}</div>
-      <span className="status-hint" role="status">{prefix ? `${prefix} …  ${prefix === 'a' ? 'a: independent · l: linked · t l: labeled link' : prefix === 'at' ? 'l: labeled link' : 'd: delete focused block'}  · Esc cancels` : editing ? 'Esc → normal · Esc again → canvas' : message}</span>
+      <span className="status-hint" role="status">{prefix ? `${prefix} …  ${prefix === 'a' ? 'a: independent · l: linked · t l: labeled link' : 'l: labeled link'}  · Esc cancels` : editing ? 'Esc → normal · Esc again → canvas' : message}</span>
       <div className="status-right"><span>{selectedIndex >= 0 ? `${String(selectedIndex + 1).padStart(2, '0')} / ` : ''}{diagram.blocks.length} thoughts</span><span className={saveState.startsWith('Saved') ? 'save-indicator' : 'save-error'}>● <span>{saveState}</span></span></div>
     </footer>
 
@@ -320,8 +353,8 @@ function App() {
       <h2 id="help-title">Keep your hands on the keys.</h2>
       <div className="shortcut-list">{[
         ['h j k l', 'Focus left, down, up, right'], ['i / Enter', 'Edit the focused block · start in insert mode'], ['Esc, then Esc', 'Vim normal, then back to the canvas'],
-        ['aa', 'Create an independent block'], ['al', 'Create a linked block'], ['atl', 'Label a connection, then create its block'], ['dd', 'Delete the focused block and its links'],
-        ['u / Ctrl+r', 'Undo / redo diagram changes in pan mode'], ['Shift+H J K L', 'Pan the viewport'], ['+ / − / 0', 'Zoom in / out / fit diagram'], ['?', 'Show this guide'],
+        ['aa', 'Create an independent block'], ['al', 'Create a linked block'], ['atl', 'Label a connection, then create its block'], ['d', 'Delete the focused block and its links'],
+        ['u / R / Ctrl+r', 'Undo / redo diagram changes in pan mode'], ['Shift+H J K L', 'Pan the viewport'], ['+ / − / 0', 'Zoom in / out / fit diagram'], ['p', 'Toggle Markdown preview'], ['?', 'Show this guide'],
       ].map(([keys, text]) => <div key={keys}><kbd>{keys}</kbd><span>{text}</span></div>)}</div>
       <p>Inside a block, Vim owns the keyboard. Enter adds a newline in insert mode. Tab indents. Drag a block to reposition it, or drag empty canvas to pan. Your draft saves in this browser as you type.</p>
     </section></div>}

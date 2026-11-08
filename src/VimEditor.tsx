@@ -17,7 +17,7 @@ export function VimEditor(props: Props) {
   const callbacks = useRef(props);
   callbacks.current = props;
 
-  useEffect(() => {
+  useEffect(function VimEditor() {
     const element = host.current!;
     const view = new EditorView({
       parent: element,
@@ -55,7 +55,7 @@ export function VimEditor(props: Props) {
       const state = cm.state.vim;
       const pending = state?.inputState;
       if (!state?.insertMode && !state?.visualMode && !cm.state.dialog &&
-          !pending?.keyBuffer.length && !pending?.operator && !pending?.prefixRepeat.length) {
+        !pending?.keyBuffer.length && !pending?.operator && !pending?.prefixRepeat.length) {
         event.preventDefault();
         event.stopPropagation();
         callbacks.current.onExit();
