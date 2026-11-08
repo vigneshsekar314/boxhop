@@ -58,7 +58,7 @@ npx playwright install chromium
 npm test
 ```
 
-Browser tests exercise actual Vim modes and motions, spatial navigation, stable placement, labeled-link cancellation, undo, draft recovery, and native file save/open.
+Browser tests cover Vim editing, spatial navigation, block and diagram changes, Markdown preview, tab naming and deletion, draft recovery, and importing/exporting diagrams.
 
 ## Design notes
 
