@@ -5,14 +5,14 @@ import { EditorView, keymap, placeholder } from '@codemirror/view';
 import { indentWithTab } from '@codemirror/commands';
 import { getCM, Vim, vim } from '@replit/codemirror-vim';
 
-type Props = {
+export type Props = {
   text: string;
   onChange: (text: string) => void;
   onMode: (mode: string) => void;
   onExit: () => void;
 };
 
-export function VimEditor(props: Props) {
+export function useVimEditor(props: Props) {
   const host = useRef<HTMLDivElement>(null);
   const callbacks = useRef(props);
   callbacks.current = props;
@@ -39,7 +39,15 @@ export function VimEditor(props: Props) {
     const cm = getCM(view)!;
     const reportMode = () => {
       const state = cm.state.vim;
-      callbacks.current.onMode(cm.state.dialog ? 'COMMAND' : state?.insertMode ? 'INSERT' : state?.visualMode ? 'VISUAL' : 'NORMAL');
+      callbacks.current.onMode(
+        cm.state.dialog
+          ? 'COMMAND'
+          : state?.insertMode
+          ? 'INSERT'
+          : state?.visualMode
+          ? 'VISUAL'
+          : 'NORMAL',
+      );
     };
     cm.on('vim-mode-change', reportMode);
     cm.on('dialog', reportMode);
@@ -54,8 +62,10 @@ export function VimEditor(props: Props) {
       }
       const state = cm.state.vim;
       const pending = state?.inputState;
-      if (!state?.insertMode && !state?.visualMode && !cm.state.dialog &&
-        !pending?.keyBuffer.length && !pending?.operator && !pending?.prefixRepeat.length) {
+      if (
+        !state?.insertMode && !state?.visualMode && !cm.state.dialog &&
+        !pending?.keyBuffer.length && !pending?.operator && !pending?.prefixRepeat.length
+      ) {
         event.preventDefault();
         event.stopPropagation();
         callbacks.current.onExit();
@@ -74,5 +84,5 @@ export function VimEditor(props: Props) {
     };
   }, []);
 
-  return <div className="vim-editor" ref={host} />;
+  return host;
 }

@@ -1,0 +1,1 @@
+export { DiagramTabs } from './DiagramTabs';

@@ -2,8 +2,8 @@
 
 ## Project layout
 
-- `src/main.tsx` contains the React app, canvas interactions, diagram tabs, history, persistence, and JSON import/export.
-- `src/VimEditor.tsx` wraps CodeMirror and its Vim integration. `src/style.css` contains the global UI styles.
+- `src/main.tsx` mounts the app. `src/features/workspace` contains the diagram workspace, canvas, tabs, history, persistence, and JSON import/export.
+- `src/features/workspace/components/VimEditor` wraps CodeMirror and its Vim integration. `src/style.css` contains the global UI styles.
 - `tests/prototype.spec.ts` contains Playwright browser tests. `docs/README.md` is the detailed user guide; the root `README.md` is the project overview.
 - `docs/concepts_v2.md` and `docs/implementation_v2.md` describe the design; check the running code before assuming every planned feature is implemented.
 
