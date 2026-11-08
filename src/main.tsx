@@ -10,7 +10,12 @@ type Block = { id: string; text: string; x: number; y: number };
 type Link = { id: string; from: string; to: string; label: string };
 type Diagram = { version: 1; blocks: Block[]; links: Link[] };
 type Camera = { x: number; y: number; zoom: number };
+type DiagramTab = { id: string; title: string; diagram: Diagram };
+type Workspace = { version: 1; activeId: string; tabs: DiagramTab[] };
+type Snapshot = { diagram: Diagram; title: string };
+type TabSession = { focused: string | null; camera: Camera; undo: Snapshot[]; redo: Snapshot[] };
 const STORAGE_KEY = 'boxhop-prototype-v1';
+const WORKSPACE_KEY = 'boxhop-workspace-v1';
 const WIDTH = 264, HEIGHT = 172;
 const directions: Record<string, [number, number]> = { h: [-1, 0], j: [0, 1], k: [0, -1], l: [1, 0] };
 const demo: Diagram = {
@@ -40,42 +45,73 @@ function isDiagram(value: unknown): value is Diagram {
     d.links.every(l => l && typeof l.id === 'string' && typeof l.label === 'string' && ids.has(l.from) && ids.has(l.to));
 }
 
-function load(): Diagram {
+function isWorkspace(value: unknown): value is Workspace {
+  if (!value || typeof value !== 'object') return false;
+  const workspace = value as Workspace;
+  if (workspace.version !== 1 || typeof workspace.activeId !== 'string' || !Array.isArray(workspace.tabs) || !workspace.tabs.length) return false;
+  if (!workspace.tabs.every(tab => tab && typeof tab.id === 'string' && typeof tab.title === 'string' && isDiagram(tab.diagram))) return false;
+  return new Set(workspace.tabs.map(tab => tab.id)).size === workspace.tabs.length && workspace.tabs.some(tab => tab.id === workspace.activeId);
+}
+
+function load(): Workspace {
+  try {
+    const workspace: unknown = JSON.parse(localStorage.getItem(WORKSPACE_KEY) || 'null');
+    if (isWorkspace(workspace)) return workspace;
+  } catch { /* Try the previous single-diagram draft. */ }
   try {
     const saved: unknown = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
-    if (isDiagram(saved)) return saved;
+    if (isDiagram(saved)) return { version: 1, activeId: 'initial', tabs: [{ id: 'initial', title: 'Untitled 1', diagram: saved }] };
   } catch { /* The sample remains usable when browser storage is unavailable. */ }
-  return demo;
+  return { version: 1, activeId: 'initial', tabs: [{ id: 'initial', title: 'Untitled 1', diagram: demo }] };
 }
 
 function App() {
-  const [diagram, setDiagram] = useState<Diagram>(load);
+  const [workspace, setWorkspace] = useState<Workspace>(load);
+  const workspaceCurrent = useRef(workspace);
+  const diagram = workspace.tabs.find(tab => tab.id === workspace.activeId)!.diagram;
   const current = useRef(diagram);
   const [focused, setFocused] = useState<string | null>(diagram.blocks[0]?.id ?? null);
   const [editing, setEditing] = useState<string | null>(null);
   const [vimMode, setVimMode] = useState('INSERT');
   const [prefix, setPrefix] = useState('');
   const [help, setHelp] = useState(false);
+  const [fileMenu, setFileMenu] = useState(false);
+  const [command, setCommand] = useState<string | null>(null);
+  const [renaming, setRenaming] = useState<{ id: string; value: string } | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
   const [preview, setPreview] = useState(false);
   const [labelSource, setLabelSource] = useState<string | null>(null);
   const [label, setLabel] = useState('');
   const [camera, setCamera] = useState<Camera>({ x: 0, y: 0, zoom: 1 });
   const [saveState, setSaveState] = useState('Saved in this browser');
   const [message, setMessage] = useState('A small canvas. A little Vim. Make it yours.');
+  const activeState = useRef({ editing, focused, camera, command });
+  activeState.current = { editing, focused, camera, command };
   const canvas = useRef<HTMLDivElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const helpClose = useRef<HTMLButtonElement>(null);
+  const fileMenuRef = useRef<HTMLDivElement>(null);
+  const fileButton = useRef<HTMLButtonElement>(null);
+  const deleteTrigger = useRef<HTMLButtonElement | null>(null);
   const editBefore = useRef<Diagram | null>(null);
-  const undoStack = useRef<Diagram[]>([]);
-  const redoStack = useRef<Diagram[]>([]);
+  const undoStack = useRef<Snapshot[]>([]);
+  const redoStack = useRef<Snapshot[]>([]);
+  const renameActive = useRef<string | null>(null);
+  const sessions = useRef(new Map<string, TabSession>());
   const drag = useRef<null | { id?: string; startX: number; startY: number; x: number; y: number; before: Diagram }>(null);
 
-  function update(next: Diagram) { current.current = next; setDiagram(next); }
+  function updateWorkspace(next: Workspace) { workspaceCurrent.current = next; setWorkspace(next); }
+  function update(next: Diagram, title?: string) {
+    current.current = next;
+    const workspace = workspaceCurrent.current;
+    updateWorkspace({ ...workspace, tabs: workspace.tabs.map(tab => tab.id === workspace.activeId ? { ...tab, diagram: next, title: title ?? tab.title } : tab) });
+  }
   function remember(before: Diagram) {
-    undoStack.current = [...undoStack.current.slice(-49), before];
+    const title = workspaceCurrent.current.tabs.find(tab => tab.id === workspaceCurrent.current.activeId)!.title;
+    undoStack.current = [...undoStack.current.slice(-49), { diagram: before, title }];
     redoStack.current = [];
   }
-  function change(next: Diagram) { remember(current.current); update(next); }
+  function change(next: Diagram, title?: string) { remember(current.current); update(next, title); }
   function returnToCanvas() { canvas.current?.focus(); }
   function togglePreview() {
     setPreview(open => !open);
@@ -94,6 +130,76 @@ function App() {
     setEditing(null);
     setPrefix('');
     returnToCanvas();
+  }
+  function activateTab(id: string, nextWorkspace = workspaceCurrent.current) {
+    if (id === workspaceCurrent.current.activeId) { returnToCanvas(); return; }
+    const tab = nextWorkspace.tabs.find(item => item.id === id);
+    if (!tab) return;
+    const active = activeState.current;
+    if (active.editing) finishEdit();
+    sessions.current.set(workspaceCurrent.current.activeId, { focused: active.focused, camera: active.camera, undo: undoStack.current, redo: redoStack.current });
+    const session = sessions.current.get(id);
+    current.current = tab.diagram;
+    undoStack.current = session?.undo ?? [];
+    redoStack.current = session?.redo ?? [];
+    updateWorkspace({ ...nextWorkspace, activeId: id });
+    setFocused(session?.focused ?? tab.diagram.blocks[0]?.id ?? null);
+    if (session) setCamera(session.camera); else fit();
+    setPrefix('');
+    setCommand(null);
+    setFileMenu(false);
+    setLabelSource(null);
+    setLabel('');
+    setMessage('Diagram ready.');
+    returnToCanvas();
+  }
+  function newDiagram(title?: string, diagram: Diagram = { version: 1, blocks: [], links: [] }) {
+    const workspace = workspaceCurrent.current;
+    const id = crypto.randomUUID();
+    let number = workspace.tabs.length + 1;
+    while (workspace.tabs.some(tab => tab.title === `Untitled ${number}`)) number++;
+    const tab: DiagramTab = { id, title: title?.trim() || `Untitled ${number}`, diagram };
+    activateTab(id, { ...workspace, tabs: [...workspace.tabs, tab] });
+  }
+  function cancelDelete() {
+    setDeleting(null);
+    deleteTrigger.current?.focus();
+    deleteTrigger.current = null;
+  }
+  function deleteDiagram() {
+    const workspace = workspaceCurrent.current;
+    const index = workspace.tabs.findIndex(tab => tab.id === deleting);
+    if (index < 0) { cancelDelete(); return; }
+    const tabs = workspace.tabs.filter(tab => tab.id !== deleting);
+    if (!tabs.length) tabs.push({ id: crypto.randomUUID(), title: 'Untitled 1', diagram: { version: 1, blocks: [], links: [] } });
+    if (workspace.activeId === deleting) {
+      activateTab(tabs[Math.min(index, tabs.length - 1)].id, { ...workspace, tabs });
+    } else {
+      updateWorkspace({ ...workspace, tabs });
+      if (editing) document.querySelector<HTMLElement>('.cm-content')?.focus();
+      else if (command !== null) document.getElementById('command-input')?.focus();
+      else returnToCanvas();
+    }
+    sessions.current.delete(deleting!);
+    deleteTrigger.current = null;
+    setDeleting(null);
+    setMessage('Diagram deleted.');
+  }
+  function startRename(tab: DiagramTab) {
+    if (editing) finishEdit();
+    renameActive.current = tab.id;
+    setRenaming({ id: tab.id, value: tab.title });
+  }
+  function finishRename(save: boolean, focusCanvas: boolean) {
+    if (!renaming || renameActive.current !== renaming.id) return;
+    renameActive.current = null;
+    setRenaming(null);
+    const title = renaming.value.trim();
+    const active = workspaceCurrent.current.tabs.find(tab => tab.id === renaming.id);
+    if (save && title && active && active.id === workspaceCurrent.current.activeId && title !== active.title) {
+      change(current.current, title);
+    }
+    if (focusCanvas) returnToCanvas();
   }
   function edit(id: string) {
     editBefore.current = current.current;
@@ -153,23 +259,25 @@ function App() {
     const to = redo ? undoStack.current : redoStack.current;
     const next = from.pop();
     if (!next) { setMessage(redo ? 'Nothing to redo.' : 'Nothing to undo.'); return; }
-    to.push(current.current);
-    update(next);
-    setFocused(next.blocks.some(b => b.id === focused) ? focused : next.blocks[0]?.id ?? null);
+    to.push({ diagram: current.current, title: workspaceCurrent.current.tabs.find(tab => tab.id === workspaceCurrent.current.activeId)!.title });
+    update(next.diagram, next.title);
+    setFocused(next.diagram.blocks.some(b => b.id === focused) ? focused : next.diagram.blocks[0]?.id ?? null);
     setMessage(redo ? 'Change restored.' : 'Change undone.');
   }
   function exportFile() {
-    const url = URL.createObjectURL(new Blob([JSON.stringify(current.current, null, 2)], { type: 'application/json' }));
+    const title = workspaceCurrent.current.tabs.find(tab => tab.id === workspaceCurrent.current.activeId)!.title;
+    const filename = title.replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_').replace(/[. ]+$/, '').slice(0, 120) || 'my-thoughts';
+    const url = URL.createObjectURL(new Blob([JSON.stringify({ ...current.current, name: title }, null, 2)], { type: 'application/json' }));
     const a = document.createElement('a');
-    a.href = url; a.download = 'my-thoughts.boxhop.json'; a.click();
+    a.href = url; a.download = `${filename}.boxhop.json`; a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
     setMessage('Diagram downloaded. Your browser copy stays here.');
   }
 
   useEffect(() => {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(diagram)); setSaveState('Saved in this browser'); }
+    try { localStorage.setItem(WORKSPACE_KEY, JSON.stringify(workspace)); setSaveState('Saved in this browser'); }
     catch { setSaveState('Browser save failed — download a copy'); }
-  }, [diagram]);
+  }, [workspace]);
 
   useEffect(() => {
     fit();
@@ -178,11 +286,18 @@ function App() {
 
   useEffect(() => { if (help) helpClose.current?.focus(); }, [help]);
 
+  useEffect(() => {
+    if (!fileMenu) return;
+    const close = (event: PointerEvent) => { if (!fileMenuRef.current?.contains(event.target as Node)) setFileMenu(false); };
+    document.addEventListener('pointerdown', close);
+    return () => document.removeEventListener('pointerdown', close);
+  }, [fileMenu]);
+
   useEffect(() => { if (focused) focusBlock(focused); }, [preview]);
 
   // Canvas shortcuts only run when the canvas itself owns keyboard focus.
   function onCanvasKey(event: ReactKeyboardEvent<HTMLDivElement>) {
-    if (event.target !== event.currentTarget || event.isDefaultPrevented() || event.nativeEvent.isComposing || editing || labelSource || help) return;
+    if (event.target !== event.currentTarget || event.isDefaultPrevented() || event.nativeEvent.isComposing || editing || labelSource || help || command !== null) return;
     if (event.ctrlKey || event.metaKey || event.altKey) {
       if (event.ctrlKey && !event.metaKey && !event.altKey && event.key === 'r') { event.preventDefault(); undo(true); }
       return;
@@ -191,6 +306,13 @@ function App() {
     if (key === 'Tab') { setPrefix(''); return; } // Preserve normal browser focus navigation.
     if (event.repeat && !directions[key.toLowerCase()]) return;
     if (key === 'Escape') { setPrefix(''); return; }
+    if (key === 'F2') {
+      event.preventDefault();
+      setPrefix('');
+      const tab = workspaceCurrent.current.tabs.find(item => item.id === workspaceCurrent.current.activeId);
+      if (tab) startRename(tab);
+      return;
+    }
     if (prefix) {
       event.preventDefault();
       const sequence = prefix + key;
@@ -232,6 +354,7 @@ function App() {
     else if (key === '-') { event.preventDefault(); zoomBy(1 / 1.15); }
     else if (key === '0') { event.preventDefault(); fit(); }
     else if (key === 'p') { event.preventDefault(); togglePreview(); }
+    else if (key === ':') { event.preventDefault(); setCommand(''); }
     else if (key === '?') { event.preventDefault(); setHelp(true); }
   }
 
@@ -257,12 +380,20 @@ function App() {
   }
 
   const selectedIndex = diagram.blocks.findIndex(b => b.id === focused);
-  const mode = editing ? `EDIT · ${vimMode}` : labelSource ? 'LINK LABEL' : 'PAN';
+  const mode = editing ? `EDIT · ${vimMode}` : labelSource ? 'LINK LABEL' : command !== null ? 'COMMAND' : 'PAN';
   return <div className="app">
     <header className="topbar">
       <a className="brand" href="./" aria-label="Boxhop home"><span className="brand-icon">b<span>↗</span></span>boxhop<span className="prototype">playground</span></a>
-      <div className="document-name">Untitled thoughts <span> / </span><small>local draft</small></div>
+      <div className="document-name">{workspace.tabs.find(tab => tab.id === workspace.activeId)!.title} <span> / </span><small>local draft</small></div>
       <nav aria-label="Document actions">
+        <div className="file-menu" ref={fileMenuRef} onBlur={event => {
+          if (!event.currentTarget.contains(event.relatedTarget)) setFileMenu(false);
+        }} onKeyDown={event => {
+          if (event.key === 'Escape' && fileMenu) { event.stopPropagation(); setFileMenu(false); fileButton.current?.focus(); }
+        }}>
+          <button ref={fileButton} aria-haspopup="menu" aria-expanded={fileMenu} onClick={() => setFileMenu(open => !open)}>File</button>
+          {fileMenu && <div className="file-menu-items" role="menu"><button autoFocus role="menuitem" onClick={() => newDiagram()}>New diagram <kbd>:new</kbd></button></div>}
+        </div>
         <button aria-pressed={preview} aria-controls="markdown-preview" onClick={togglePreview}>Preview</button>
         <button onClick={() => { if (editing) finishEdit(); fileInput.current?.click(); }}>Open</button>
         <button onClick={exportFile}>Download <span aria-hidden="true">↗</span></button>
@@ -270,18 +401,51 @@ function App() {
       </nav>
       <input ref={fileInput} hidden type="file" accept=".json" onChange={async event => {
         const file = event.target.files?.[0]; if (!file) return;
+        event.target.value = '';
         try {
           const next: unknown = JSON.parse(await file.text());
           if (!isDiagram(next)) throw new Error('Invalid diagram');
-          change(next); setFocused(next.blocks[0]?.id ?? null);
-          requestAnimationFrame(fit);
+          const name = (next as Diagram & { name?: unknown }).name;
+          const title = typeof name === 'string' && name.trim() ? name.trim() : file.name.replace(/(?:\.boxhop)?\.json$/i, '').trim();
+          newDiagram(title, { version: next.version, blocks: next.blocks, links: next.links });
           setMessage('Diagram opened. Press i to start editing.');
-        } catch { setMessage('Could not open this file. Choose a Boxhop prototype JSON file.'); }
-        event.target.value = ''; returnToCanvas();
+        } catch {
+          setMessage('Could not open this file. Choose a Boxhop prototype JSON file.');
+          if (activeState.current.editing) document.querySelector<HTMLElement>('.cm-content')?.focus();
+          else if (activeState.current.command !== null) document.getElementById('command-input')?.focus();
+          else returnToCanvas();
+        }
       }} />
     </header>
 
-    <div className="workspace">
+    <div className="diagram-tabs" role="tablist" aria-label="Open diagrams">
+      {workspace.tabs.map((tab, index) => <div key={tab.id} role="presentation" className={`diagram-tab ${workspace.activeId === tab.id ? 'active' : ''}`}>
+      {renaming?.id === tab.id ? <input className="tab-rename" aria-label="Diagram name" autoFocus value={renaming.value}
+        onFocus={event => event.currentTarget.select()} onChange={event => setRenaming({ id: tab.id, value: event.target.value })}
+        onBlur={() => finishRename(true, false)} onKeyDown={event => {
+          if (event.key === 'Enter' || event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); finishRename(event.key === 'Enter', true); }
+        }} /> : <button className="tab-select" role="tab" aria-selected={workspace.activeId === tab.id} aria-controls="diagram-panel" tabIndex={workspace.activeId === tab.id ? 0 : -1} title="Double-click or press F2 to rename"
+        onClick={() => activateTab(tab.id)} onDoubleClick={() => startRename(tab)} onKeyDown={event => {
+          if (event.key === 'F2') { event.preventDefault(); startRename(tab); return; }
+          let next = index;
+          if (event.key === 'ArrowRight') next = (index + 1) % workspace.tabs.length;
+          else if (event.key === 'ArrowLeft') next = (index + workspace.tabs.length - 1) % workspace.tabs.length;
+          else if (event.key === 'Home') next = 0;
+          else if (event.key === 'End') next = workspace.tabs.length - 1;
+          else return;
+          event.preventDefault();
+          const button = event.currentTarget.closest('[role="tablist"]')?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next];
+          activateTab(workspace.tabs[next].id);
+          button?.focus();
+        }}>{tab.title}</button>}
+        <button className="tab-close" aria-label={`Delete diagram ${tab.title}`} title={`Delete ${tab.title}`} onClick={event => {
+          deleteTrigger.current = event.currentTarget;
+          setDeleting(tab.id);
+        }}>×</button>
+      </div>)}
+    </div>
+
+    <div id="diagram-panel" className="workspace" role="tabpanel" aria-label="Active diagram">
     <main ref={canvas} className="canvas" tabIndex={0} aria-label="Diagram canvas. h j k l to navigate. i to edit. Question mark for help."
       onKeyDown={onCanvasKey} onPointerDown={event => startDrag(event)} onPointerMove={dragMove} onPointerUp={endDrag} onPointerCancel={endDrag}
       onWheel={event => {
@@ -338,9 +502,30 @@ function App() {
 
     <footer className="statusbar" aria-label="Editor status">
       <div className={`mode ${editing ? 'mode-edit' : ''}`} aria-live="polite"><span className="mode-dot" />{mode}</div>
-      <span className="status-hint" role="status">{prefix ? `${prefix} …  ${prefix === 'a' ? 'a: independent · l: linked · t l: labeled link' : 'l: labeled link'}  · Esc cancels` : editing ? 'Esc → normal · Esc again → canvas' : message}</span>
+      {command !== null ? <form className="command-line" onSubmit={event => {
+        event.preventDefault();
+        const entered = command.trim();
+        const newCommand = /^new(?:\s+(.+))?$/.exec(entered);
+        if (newCommand) newDiagram(newCommand[1]);
+        else { setCommand(null); setMessage(entered ? `Unknown command: ${entered}` : 'Command canceled.'); returnToCanvas(); }
+      }}><label htmlFor="command-input">:</label><input id="command-input" aria-label="Command" autoFocus value={command} onChange={event => setCommand(event.target.value)} onKeyDown={event => {
+        if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); setCommand(null); returnToCanvas(); }
+      }} /></form> : <span className="status-hint" role="status">{prefix ? `${prefix} …  ${prefix === 'a' ? 'a: independent · l: linked · t l: labeled link' : 'l: labeled link'}  · Esc cancels` : editing ? 'Esc → normal · Esc again → canvas' : message}</span>}
       <div className="status-right"><span>{selectedIndex >= 0 ? `${String(selectedIndex + 1).padStart(2, '0')} / ` : ''}{diagram.blocks.length} thoughts</span><span className={saveState.startsWith('Saved') ? 'save-indicator' : 'save-error'}>● <span>{saveState}</span></span></div>
     </footer>
+
+    {deleting && <div className="overlay"><section className="delete-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-title" aria-describedby="delete-description" onKeyDown={event => {
+      if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); cancelDelete(); }
+      if (event.key === 'Tab') {
+        const buttons = event.currentTarget.querySelectorAll<HTMLButtonElement>('button');
+        if (event.shiftKey && document.activeElement === buttons[0]) { event.preventDefault(); buttons[buttons.length - 1]?.focus(); }
+        else if (!event.shiftKey && document.activeElement === buttons[buttons.length - 1]) { event.preventDefault(); buttons[0]?.focus(); }
+      }
+    }}>
+      <span className="eyebrow">DELETE DIAGRAM</span><h2 id="delete-title">Delete “{workspace.tabs.find(tab => tab.id === deleting)?.title}”?</h2>
+      <p id="delete-description">This removes the diagram from this workspace and cannot be undone. Download a copy first if you want to keep it.{workspace.tabs.length === 1 ? ' A new empty diagram will open.' : ''}</p>
+      <div className="delete-actions"><button autoFocus onClick={cancelDelete}>Cancel</button><button className="delete-confirm" onClick={deleteDiagram}>Delete diagram</button></div>
+    </section></div>}
 
     {labelSource && <div className="overlay"><form className="label-dialog" role="dialog" aria-modal="true" aria-label="New link label" onSubmit={event => { event.preventDefault(); create(true, label); }}>
       <span className="eyebrow">CONNECT THE THOUGHTS</span><h2>What's the relationship?</h2>
@@ -354,7 +539,7 @@ function App() {
       <div className="shortcut-list">{[
         ['h j k l', 'Focus left, down, up, right'], ['i / Enter', 'Edit the focused block · start in insert mode'], ['Esc, then Esc', 'Vim normal, then back to the canvas'],
         ['aa', 'Create an independent block'], ['al', 'Create a linked block'], ['atl', 'Label a connection, then create its block'], ['d', 'Delete the focused block and its links'],
-        ['u / R / Ctrl+r', 'Undo / redo diagram changes in pan mode'], ['Shift+H J K L', 'Pan the viewport'], ['+ / − / 0', 'Zoom in / out / fit diagram'], ['p', 'Toggle Markdown preview'], ['?', 'Show this guide'],
+        ['u / R / Ctrl+r', 'Undo / redo diagram changes in pan mode'], ['Shift+H J K L', 'Pan the viewport'], ['+ / − / 0', 'Zoom in / out / fit diagram'], ['p', 'Toggle Markdown preview'], [':new [name]', 'Open a new diagram in a tab'], ['F2', 'Rename the active diagram'], ['?', 'Show this guide'],
       ].map(([keys, text]) => <div key={keys}><kbd>{keys}</kbd><span>{text}</span></div>)}</div>
       <p>Inside a block, Vim owns the keyboard. Enter adds a newline in insert mode. Tab indents. Drag a block to reposition it, or drag empty canvas to pan. Your draft saves in this browser as you type.</p>
     </section></div>}
